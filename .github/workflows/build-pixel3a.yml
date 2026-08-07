@@ -126,20 +126,16 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/device_kernel
           
-          # 【精准修复】不直接粗暴删掉 .git，而是把里面的版本/refs掏空，伪装成一个干净的无版本库
-          rm -rf .git/refs .git/logs .git/OBJECTS .git/objects
-          mkdir -p .git/objects .git/refs
+          # 1. 确保源码目录绝对干净，清理掉之前意外生成的配置文件，解决 ".. is not clean" 报错
+          make mrproper
           
-          # 强行重写 setlocalversion 脚本，让它永远吐出极简短后缀
-          if [ -d "scripts" ]; then
-            echo -e '#!/bin/bash\necho "-susfs"' > scripts/setlocalversion
+          # 2. 暴力重写内核本地版本号获取脚本
+          # 直接抹掉它去读取 git hash 和 -dirty 标志的逻辑，永远只返回 "-susfs"
+          if [ -f "scripts/setlocalversion" ]; then
+            echo '#!/bin/bash' > scripts/setlocalversion
+            echo 'echo "-susfs"' >> scripts/setlocalversion
             chmod +x scripts/setlocalversion
           fi
-          
-          # 提前锁定内核 release 版本文件，将其死死压在 64 字符以内
-          mkdir -p include/config out/include/config
-          echo "4.9.337-susfs" > include/config/kernel.release
-          echo "4.9.337-susfs" > out/include/config/kernel.release
 
       - name: 🧰 Patch Kernel of Re:Kernel
         uses: ./.github/workflows/patch-rekernel
