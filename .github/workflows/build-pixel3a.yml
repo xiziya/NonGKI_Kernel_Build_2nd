@@ -1,4 +1,4 @@
-name: Build For Pixel3a
+name: Build For Pixel-3a
 
 on:
   workflow_call:
@@ -119,8 +119,11 @@ jobs:
         run: |
           # Only ${{ env.DEVICE_NAME }} use it.
           cd $GITHUB_WORKSPACE/device_kernel
-          # Nothing
-
+          # 自动关闭导致编译报错的 LTO 优化
+          sed -i 's/CONFIG_LTO_CLANG=y/# CONFIG_LTO_CLANG is not set/' arch/arm64/configs/bonito_defconfig
+          # 或者直接在生成配置后禁用它
+          # echo "CONFIG_LTO_CLANG=n" >> arch/arm64/configs/bonito_defconfig
+          
       - name: 🧰 Patch Kernel of Re:Kernel
         uses: ./.github/workflows/patch-rekernel
 
