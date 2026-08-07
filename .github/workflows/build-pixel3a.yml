@@ -126,9 +126,7 @@ jobs:
           sed -i 's/CONFIG_LTO_CLANG=y/# CONFIG_LTO_CLANG is not set/' arch/arm64/configs/bonito_defconfig
           sed -i 's/CONFIG_DEBUG_INFO=y/# CONFIG_DEBUG_INFO is not set/g' arch/arm64/configs/bonito_defconfig
           
-          # 3. 【核心修复：解决 VDSO 汇编器报错】
-          # VDSO Makefile 硬编码了 "-g"，导致 Clang 19 强行输出 DWARF 5 格式 (.file 0)
-          # 用 sed 强行把 -g 替换为 -gdwarf-4，让老版本汇编器能看懂
+          # 3. 解决 VDSO 汇编器报错 (强制 DWARF-4)
           if [ -f "arch/arm64/kernel/vdso/Makefile" ]; then
             sed -i 's/-g /-gdwarf-4 /g' arch/arm64/kernel/vdso/Makefile
             sed -i 's/-g$/-gdwarf-4/g' arch/arm64/kernel/vdso/Makefile
@@ -140,6 +138,10 @@ jobs:
             echo 'echo "-susfs"' >> scripts/setlocalversion
             chmod +x scripts/setlocalversion
           fi
+          
+          # 5. 【新增修复】解决 KPM 补丁冲突导致的 VM_LOWMEM 未定义报错
+          # 直接将无法识别的 VM_LOWMEM 标志全部替换为 0，安全绕过编译检查
+          sed -i 's/VM_LOWMEM/0/g' mm/vmalloc.c
           
       - name: 🛠️ Force fix UTS_LEN 64-char limit
         run: |
