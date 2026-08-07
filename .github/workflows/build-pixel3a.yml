@@ -126,21 +126,20 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/device_kernel
           
-          # 1. 彻底抹除源码的 git 属性，让底层脚本无法获取任何长串 commit hash 和 -dirty 标志
-          rm -rf .git
+          # 【精准修复】不直接粗暴删掉 .git，而是把里面的版本/refs掏空，伪装成一个干净的无版本库
+          rm -rf .git/refs .git/logs .git/OBJECTS .git/objects
+          mkdir -p .git/objects .git/refs
           
-          # 2. 直接清空或重写内核底层的本地版本号检测脚本 (setlocalversion)
-          # 无论框架怎么调用它，都只允许它返回一个极短的空字符串或固定短后缀
-          if [ -f "scripts/setlocalversion" ]; then
-            echo '#!/bin/bash' > scripts/setlocalversion
-            echo 'echo ""' >> scripts/setlocalversion
+          # 强行重写 setlocalversion 脚本，让它永远吐出极简短后缀
+          if [ -d "scripts" ]; then
+            echo -e '#!/bin/bash\necho "-susfs"' > scripts/setlocalversion
             chmod +x scripts/setlocalversion
           fi
           
-          # 3. 手动提前在 out 目录生成符合 64 字符限制的 release 文件，并将其设为只读/不可修改
-          mkdir -p out/include/config include/config
-          echo "4.9.337-custom" > include/config/kernel.release
-          echo "4.9.337-custom" > out/include/config/kernel.release
+          # 提前锁定内核 release 版本文件，将其死死压在 64 字符以内
+          mkdir -p include/config out/include/config
+          echo "4.9.337-susfs" > include/config/kernel.release
+          echo "4.9.337-susfs" > out/include/config/kernel.release
 
       - name: 🧰 Patch Kernel of Re:Kernel
         uses: ./.github/workflows/patch-rekernel
