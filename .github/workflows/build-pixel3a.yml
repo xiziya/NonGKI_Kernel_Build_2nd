@@ -121,15 +121,27 @@ jobs:
           cd $GITHUB_WORKSPACE/device_kernel
           # 自动关闭导致编译报错的 LTO 优化
           sed -i 's/CONFIG_LTO_CLANG=y/# CONFIG_LTO_CLANG is not set/' arch/arm64/configs/bonito_defconfig
+
+      - name: 🛠️ Force fix UTS_LEN 64-char limit
+        run: |
+          cd $GITHUB_WORKSPACE/device_kernel
           
-          # 【终极修复】直接重写内核顶层的 VERSION、PATCHLEVEL、SUBLEVEL 和 EXTRAVERSION，生成一个绝对短于64字符的短版本号
-          if [ -f "Makefile" ]; then
-            sed -i 's/^VERSION =.*/VERSION = 4/' Makefile
-            sed -i 's/^PATCHLEVEL =.*/PATCHLEVEL = 9/' Makefile
-            sed -i 's/^SUBLEVEL =.*/SUBLEVEL = 337/' Makefile
-            sed -i 's/^EXTRAVERSION =.*/EXTRAVERSION = -susfs/' Makefile
+          # 1. 彻底抹除源码的 git 属性，让底层脚本无法获取任何长串 commit hash 和 -dirty 标志
+          rm -rf .git
+          
+          # 2. 直接清空或重写内核底层的本地版本号检测脚本 (setlocalversion)
+          # 无论框架怎么调用它，都只允许它返回一个极短的空字符串或固定短后缀
+          if [ -f "scripts/setlocalversion" ]; then
+            echo '#!/bin/bash' > scripts/setlocalversion
+            echo 'echo ""' >> scripts/setlocalversion
+            chmod +x scripts/setlocalversion
           fi
           
+          # 3. 手动提前在 out 目录生成符合 64 字符限制的 release 文件，并将其设为只读/不可修改
+          mkdir -p out/include/config include/config
+          echo "4.9.337-custom" > include/config/kernel.release
+          echo "4.9.337-custom" > out/include/config/kernel.release
+
       - name: 🧰 Patch Kernel of Re:Kernel
         uses: ./.github/workflows/patch-rekernel
 
