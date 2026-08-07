@@ -122,9 +122,11 @@ jobs:
           # 自动关闭导致编译报错的 LTO 优化
           sed -i 's/CONFIG_LTO_CLANG=y/# CONFIG_LTO_CLANG is not set/' arch/arm64/configs/bonito_defconfig
           
-          # 【核心修复】修改顶层 Makefile，防止本地版本号拼接过多 hash 导致 UTS_LEN 溢出 (64字符限制)
-          # 将 EXTRAVERSION 置空或者赋一个极简后缀
+          # 【终极修复】直接重写内核顶层的 VERSION、PATCHLEVEL、SUBLEVEL 和 EXTRAVERSION，生成一个绝对短于64字符的短版本号
           if [ -f "Makefile" ]; then
+            sed -i 's/^VERSION =.*/VERSION = 4/' Makefile
+            sed -i 's/^PATCHLEVEL =.*/PATCHLEVEL = 9/' Makefile
+            sed -i 's/^SUBLEVEL =.*/SUBLEVEL = 337/' Makefile
             sed -i 's/^EXTRAVERSION =.*/EXTRAVERSION = -susfs/' Makefile
           fi
           
