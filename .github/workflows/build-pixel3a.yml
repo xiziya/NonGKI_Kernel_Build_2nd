@@ -122,8 +122,11 @@ jobs:
           # 自动关闭导致编译报错的 LTO 优化
           sed -i 's/CONFIG_LTO_CLANG=y/# CONFIG_LTO_CLANG is not set/' arch/arm64/configs/bonito_defconfig
           
-          # 【新增】清理本地仓库的 dirty 标识，防止名字过长超标
-          git update-index --assume-unchanged || true
+          # 【核心修复】修改顶层 Makefile，防止本地版本号拼接过多 hash 导致 UTS_LEN 溢出 (64字符限制)
+          # 将 EXTRAVERSION 置空或者赋一个极简后缀
+          if [ -f "Makefile" ]; then
+            sed -i 's/^EXTRAVERSION =.*/EXTRAVERSION = -susfs/' Makefile
+          fi
           
       - name: 🧰 Patch Kernel of Re:Kernel
         uses: ./.github/workflows/patch-rekernel
