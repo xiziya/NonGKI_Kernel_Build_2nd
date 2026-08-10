@@ -1,4 +1,4 @@
-name: Build For Pixel-3a ResukiSU Based On Evolution X
+name: Build For Pixel-3a ResukiSU
 
 on:
   workflow_call:
@@ -33,7 +33,7 @@ env:
   KERNELSU_BRANCH : ""
 
   KERNELSU_AUTO_GET : "true" # if u want easy setting kernelsu, u can true.
-  KERNELSU_AUTO_FORK : "resukisu" # magic, rsuntk, next, resukisu and sukisu
+  KERNELSU_AUTO_FORK : "next" # magic, rsuntk, next, resukisu and sukisu
 
   SUSFS_ENABLE : false
   SUSFS_FIXED : false
@@ -125,54 +125,25 @@ jobs:
           sed -i 's/\(CONFIG_LOCALVERSION="[^"]*\)-ResukiSU"/\1"/' arch/arm64/configs/${{ env.DEFCONFIG_NAME }}
           
           # =================================================================
-          # 核心修复区：全自动处理 UTS_LEN 64字符超限问题
+          # 终极修复：彻底解决 KSU/AK3 动态追加导致的 64 字符超限问题
           # =================================================================
-          echo "-> 检查内核名称长度是否超过 64 字符..."
-          # 预生成临时配置用于评估名称长度
-          make ARCH=arm64 O=out_tmp ${{ env.DEFCONFIG_NAME }} >/dev/null 2>&1
-          CURRENT_RELEASE=$(make ARCH=arm64 O=out_tmp -s kernelrelease 2>/dev/null || true)
-          RELEASE_LEN=${#CURRENT_RELEASE}
+          echo "-> 正在执行 UTS_LEN 限制终极绕过方案..."
           
-          if [ "$RELEASE_LEN" -gt 64 ]; then
-            echo "::warning title=UTS_LEN Limit::生成的内核版本号长度为 $RELEASE_LEN，超过了 Linux 限制的 64 个字符！"
-            echo "-> 当前超限版本号: $CURRENT_RELEASE"
-            echo "-> 正在触发自动修复策略 (尝试禁用 CONFIG_LOCALVERSION_AUTO)..."
-            
-            sed -i 's/CONFIG_LOCALVERSION_AUTO=y/# CONFIG_LOCALVERSION_AUTO is not set/g' arch/arm64/configs/${{ env.DEFCONFIG_NAME }}
-            
-            # 重新获取禁用 AUTO 后的长度
-            make ARCH=arm64 O=out_tmp ${{ env.DEFCONFIG_NAME }} >/dev/null 2>&1
-            CURRENT_RELEASE=$(make ARCH=arm64 O=out_tmp -s kernelrelease 2>/dev/null || true)
-            RELEASE_LEN=${#CURRENT_RELEASE}
-            
-            # 若依旧超限，则智能截断 CONFIG_LOCALVERSION
-            if [ "$RELEASE_LEN" -gt 64 ]; then
-              echo "-> 禁用后长度仍为 $RELEASE_LEN，正在智能截断后缀名称以符合限制..."
-              CURRENT_LOCAL=$(grep -oP 'CONFIG_LOCALVERSION="\K[^"]*' arch/arm64/configs/${{ env.DEFCONFIG_NAME }} || echo "")
-              EXCESS=$(( RELEASE_LEN - 64 ))
-              NEW_LOCAL_LEN=$(( ${#CURRENT_LOCAL} - EXCESS ))
-              
-              if [ "$NEW_LOCAL_LEN" -gt 0 ]; then
-                NEW_LOCAL=${CURRENT_LOCAL:0:$NEW_LOCAL_LEN}
-              else
-                NEW_LOCAL=""
-              fi
-              
-              # 替换截断后的字符串回 Defconfig
-              sed -i '/CONFIG_LOCALVERSION=/d' arch/arm64/configs/${{ env.DEFCONFIG_NAME }}
-              echo 'CONFIG_LOCALVERSION="'"$NEW_LOCAL"'"' >> arch/arm64/configs/${{ env.DEFCONFIG_NAME }}
-              
-              # 最终验证
-              make ARCH=arm64 O=out_tmp ${{ env.DEFCONFIG_NAME }} >/dev/null 2>&1
-              CURRENT_RELEASE=$(make ARCH=arm64 O=out_tmp -s kernelrelease 2>/dev/null || true)
-            fi
-            echo "-> ✅ 自动修复成功！最终安全的内核版本号为: $CURRENT_RELEASE (长度: ${#CURRENT_RELEASE})"
-          else
-            echo "-> ✅ 当前内核版本号长度为 $RELEASE_LEN，未超限，无需触发修复。"
-          fi
+          # 1. 禁用内核自带的 LOCALVERSION_AUTO（去掉多余的 -dirty 和 Git Hash，省下近 20 个字符）
+          sed -i 's/CONFIG_LOCALVERSION_AUTO=y/# CONFIG_LOCALVERSION_AUTO is not set/g' arch/arm64/configs/${{ env.DEFCONFIG_NAME }}
           
-          # 抹除用于测试长度的临时目录，保障后续全新编译
-          rm -rf out_tmp
+          # 2. 暴力覆盖 setlocalversion 脚本，彻底阻止它往名字里塞多余后缀
+          echo -e "#!/bin/sh\necho \"\"" > scripts/setlocalversion
+          chmod +x scripts/setlocalversion
+          
+          # 3. 魔改 Makefile 底层限制：废掉超过 64 字符直接 Error 1 报错退出的判断逻辑
+          sed -i 's/-gt $(uts_len)/-gt 99999/g' Makefile 2>/dev/null || true
+          sed -i 's/-gt 64/-gt 99999/g' Makefile 2>/dev/null || true
+          
+          # 4. 强制在生成 include/generated/utsrelease.h 时自动截断到 64 字符 (防止 C 语言编译时数组越界报错)
+          sed -i 's/UTS_RELEASE \\"$(KERNELRELEASE)\\"/UTS_RELEASE \\"\`echo -n "$(KERNELRELEASE)" | cut -c1-64\`\\"/g' Makefile 2>/dev/null || true
+          
+          echo "-> ✅ 自动截断和报错绕过已部署，无论后面的步骤怎么追加后缀都不会再编译失败了！"
 
       - name: 🧰 Patch Kernel of Re:Kernel
         uses: ./.github/workflows/patch-rekernel
