@@ -1,4 +1,4 @@
-name: Build For Pixel-3a KSU-Next
+name: Build For Pixel-3a KSU-Next Based On Evolution X
 
 on:
   workflow_call:
